@@ -1,73 +1,131 @@
-# A RAG application using LangChain
-## RAG Project Description
-This project shows a LangChain retrieval pipeline served with FastAPI + Strawberry GraphQL with vector search in Pinecone and displayed via a Flask frontend application.
-<br>    
-Please find it hosted here: 
-<br>
-### A Screenshot of the Application
+# A RAG Application Using LangChain
+
+[![Python](https://img.shields.io/badge/Python-3.12%2B-blue?logo=python&logoColor=white)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.116.1%2B-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Flask](https://img.shields.io/badge/Flask-2.2.5%2B-000000?logo=flask&logoColor=white)](https://flask.palletsprojects.com)
+[![LangChain](https://img.shields.io/badge/LangChain-0.3.27-1C3C3A)](https://github.com/langchain-ai/langchain)
+[![Pinecone](https://img.shields.io/badge/Pinecone-VectorDB-emerald)](https://pinecone.io)
+
+This project showcases a Retrieval-Augmented Generation (RAG) pipeline utilizing a LangChain retrieval architecture. The backend is served via **FastAPI + Strawberry GraphQL** (with vector search in **Pinecone**), and the user interface is built on **Flask**.
+
+🔗 **Live Deployment:** [portfolio-agent-sk6z.onrender.com](https://portfolio-agent-sk6z.onrender.com/)
+
+---
+
+## 📱 Application Preview
+
 ![A screenshot of the application](images/main_app.png)
-A screenshot of the application is shown above. The user enters a question in the text area and clicks the "Ask" button. The question is sent to the FastAPI backend which calls the function to start executing the LangChain retrieval chain. The answer is returned through the same pipeline and displayed on the Flask Frontend application.     
-<br>
-The RAG application uses my personal website https://amrit-2002.github.io/Portfolio/ as the source of information to answer questions. The website is crawled and the contents are stored in Pinecone for later retrieval.
-<br>
 
-### The Indexing Process
+The RAG application uses my personal website [amrit-2002.github.io/Portfolio](https://amrit-2002.github.io/Portfolio/) as the source of information to answer questions. The website is crawled, chunked, embedded, and stored in Pinecone for semantic retrieval.
+
+### Try Asking:
+* *"What projects are on his website?"*
+* *"What tools does he use for data engineering?"*
+
+---
+
+## ⚙️ How It Works
+
+### 1. The Indexing Process
 ![Abstract tech background](images/indexing.png)
-A crawler crawls my website to get all loadable links. Then the contents of the links are loaded and chunked for easier processing by the models. Embedding are created from the chunks and stored in Pinecone for later retrieval.
+A crawler crawls the target website to discover all loadable links. The contents of these pages are extracted, chunked for context-window optimization, converted into vector embeddings using Google's `gemini-embedding-2-preview` model, and stored in a Pinecone vector database.
 
-### Try asking
-1. “What projects are on his website?”    
-1. “What tools does he use for data engineering?”    
-
-### The Question-and-Answer Process
+### 2. The Question-and-Answer Process
 ![Abstract tech background](images/retrieval.png)
-The question is entered into the Flask frontend application. It's sent to the FastAPI GraphQL backend which calls the function to start executing the LangChain retrieval chain. An embedding is created from the question and a similarity search done in Pinecone to find semantically related text to the question.      
-<br>
-This context is added to the question to create a prompt for Google's Gemini Flash chat model to generate the answers. The answer is returned through the same pipeline and displayed on the Flask Frontend application.     
-<br>
-This RAG application can be used for any website. Just change the website in the code on GitHub.
+When a user enters a question, the Flask frontend sends a request to the FastAPI GraphQL backend. The backend computes the embedding of the query, performs a similarity search in Pinecone to find the most relevant context, and passes both the query and context to Google's Gemini Flash chat model to generate a factual response.
 
-### To run the application
-1. Clone the repository
-1. Install the required packages using `pip install -r requirements.txt`
-1. Set the required environment variables in a `.env` file:
-   - GOOGLE_API_KEY=Your_Google_API_key
-   - PINECONE_API_KEY=Your_Pinecone_API_key
-   - LANGSMITH_API_KEY=Your_Pinecone_environment
-   - LANGSMITH_TRACING=true
-1. Run the FastAPI backend using `uvicorn app.backend:app --host 0.0.0.0 --port 8000 --timeout-keep-alive 200`
-1. Run the Flask frontend using `python web/frontend_app.py` for development or `gunicorn -w 4 -b 127.0.0.1:5070 "web.frontend_app:app" --timeout 300` for production.
-1. Go to `http://localhost:5070` to access the application
+---
 
-### Why LangChain?
-LangChain provides built-in retrieval chain helpers (`create_history_aware_retriever`, `create_retrieval_chain`, `create_stuff_documents_chain`) that handle the standard RAG pattern out of the box, including reformulating follow-up questions into standalone queries using chat history. It also integrates with LangSmith, which traces all activities on the application and gives insight on what is going on. See the screenshot below of the tracing of the application on LangSmith — note that detailed traces require a paid LangSmith account.
-![LangSmith tracing of the application](images/langsmith.png)   
+## 🚀 Getting Started
 
-We can see the steps of the application and how long each step took. This is useful for debugging and optimizing the application. We can also see the inputs and outputs of each step, which is useful for understanding how the application works.
-![LangSmith tracing of the application](images/langsmith_trace.png)   
+### Prerequisites
+You will need API keys for the following services:
+* **Google Gemini AI** (for embedding generation and chat responses)
+* **Pinecone** (vector search database)
+* **LangSmith** (optional, for tracing and observability)
 
-For more complex agentic applications where explicit state management and branching control flow matter, LangGraph would be a natural next step on top of LangChain.     
+### Installation & Setup
 
-### Note
-You'll need the necessary API keys and access to the services used in this project in your environment to run it.
-I recommend using a virtual environment for better dependency management. The process is:
-```
-python3.13 -m venv .venv
-source .venv/bin/activate
-pip install -U pip
-pip install -r requirements.txt
-```
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/Amrit-2002/portfolio-agent
+   cd portfolio-agent
+   ```
 
-### Technologies Used
-- LangChain
-- LangSmith
-- FastAPI
-- Strawberry GraphQL
-- Flask
-- Pinecone
-- Google Gemini Flash 3.5 model
-- Python
-- HTML/CSS/JavaScript
-- Google's gemini-embedding-2-preview model
-- BeautifulSoup
-- Python-dotenv
+2. **Set up a Virtual Environment:**
+   * **Windows (PowerShell):**
+     ```powershell
+     python -m venv .venv
+     .venv\Scripts\activate
+     ```
+   * **macOS / Linux:**
+     ```bash
+     python3 -m venv .venv
+     source .venv/bin/activate
+     ```
+
+3. **Install Dependencies:**
+   ```bash
+   pip install --upgrade pip
+   pip install -r requirements.txt
+   ```
+
+4. **Configure Environment Variables:**
+   Create a `.env` file in the root directory:
+   ```env
+   GOOGLE_API_KEY=Your_Google_API_key
+   PINECONE_API_KEY=Your_Pinecone_API_key
+   LANGSMITH_API_KEY=Your_LangSmith_API_key
+   LANGSMITH_TRACING=true
+   ```
+
+### Running the Application Locally
+
+1. **Start the FastAPI Backend:**
+   ```bash
+   python -m uvicorn app.backend:app --host 127.0.0.1 --port 8000 --reload
+   ```
+
+2. **Start the Flask Frontend:**
+   ```bash
+   python web/frontend_app.py
+   ```
+
+3. **Access the Web App:**
+   Open your browser and navigate to `http://localhost:5070`
+
+---
+
+## 🌐 Deployment on Render
+
+This project is configured to run on Render's **Free Tier** in a single consolidated service to minimize cold starts and resource consumption.
+
+### Setup Settings:
+* **Language:** `Python 3`
+* **Build Command:** `pip install -r requirements.txt`
+* **Start Command:** `chmod +x start.sh && ./start.sh`
+* **Configured via:** [`.python-version`](file:///.python-version) (forces Python `3.12.10`) and [`start.sh`](file:///start.sh) (runs both processes concurrently).
+
+---
+
+## 🛠️ Technologies Used
+
+* **Orchestration:** LangChain, LangSmith (tracing)
+* **API & Backend:** FastAPI, Strawberry GraphQL
+* **Frontend:** Flask, HTML5, Vanilla CSS, JavaScript
+* **Models:** Google Gemini Flash 3.5, Google gemini-embedding-2-preview
+* **Database:** Pinecone Vector Database
+* **Crawling & Parsers:** BeautifulSoup4, Requests
+
+---
+
+## 🔍 Tracing & Observability with LangSmith
+
+LangChain integrates seamlessly with LangSmith to trace performance, step runtimes, inputs, and outputs across the chain.
+
+![LangSmith tracing of the application](images/langsmith.png)
+
+*Detailed breakdown of LLM inputs, outputs, and retrieved document chunks:*
+![LangSmith tracing of the application](images/langsmith_trace.png)
+
+*(Note: LangSmith tracing requires a LangSmith account).*
