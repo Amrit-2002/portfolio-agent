@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Amrit's AI Agent</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+  <div class="bg-layer bg-grid"></div>
+  <div class="bg-layer bg-glow"></div>
+
+  <main class="container">
+    <div class="left-col">
+      <header class="header">
+        <div class="brand">
+          <div class="logo" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            </svg>
+          </div>
+          <h1>Amrit's <span>Portfolio Agent</span></h1>
+        </div>
+        <p class="subtitle">A LangChain RAG application exposed by a FastAPI GraphQL backend.</p>
+        <p class="subtitle">Source context: <a href="https://amrit-2002.github.io/Portfolio/" target="_blank" rel="noopener" class="source-link">Amrit's Portfolio Website</a></p>
+      </header>
+
+      <footer class="footer">
+        <span>Powered by</span><br>
+        <span><strong>Flask</strong> · <strong>FastAPI + GraphQL</strong> · <strong>Pinecone</strong> · <strong>LangChain</strong></span>
+        <p>Find the code here: <a href="https://github.com/Amrit-2002/portfolio-agent" target="_blank" rel="noopener"><strong>Portfolio Agent</strong></a></p>
+      </footer>
+    </div>
+
+    <!-- Chat interface -->
+    <div class="card chat-card" id="chatCard" aria-label="Chat interface">
+        <div class="chat-header">
+          <span class="label">Ask me about Amrit</span>
+          <button type="button" id="clearBtn" class="clear-btn" title="Clear conversation">Clear</button>
+        </div>
+
+        <div class="chat-window" id="chatWindow" role="log" aria-label="Chat messages" aria-live="polite">
+          <div class="empty-state">
+            <p>Ask anything about Amrit's skills, experience, or projects:</p>
+            <div class="suggested-queries">
+              <button class="suggest-btn" type="button">"What are Amrit's core technical skills?"</button>
+              <button class="suggest-btn" type="button">"What web frameworks does he specialize in?"</button>
+              <button class="suggest-btn" type="button">"Tell me about some projects Amrit has built."</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="chat-input-bar">
+          <div class="input-row">
+            <textarea id="q" placeholder="Type your question…" rows="1" aria-label="Your question"></textarea>
+            <button type="button" id="mic" class="mic-btn" aria-label="Speak your question" aria-pressed="false" title="Voice input">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="9" y="2" width="6" height="12" rx="3"/>
+                <path d="M5 10v2a7 7 0 0 0 14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="22"/>
+              </svg>
+            </button>
+            <button type="button" id="send" aria-label="Send message">
+              <span class="spinner" aria-hidden="true"></span>
+              <span class="btn-text">Send</span>
+              <kbd class="shortcut">⌘↵</kbd>
+            </button>
+          </div>
+          <div class="input-footer">
+            <span id="status" class="status" role="status" aria-live="polite"></span>
+          </div>
+        </div>
+      </div>
+
+
+
+  </main>
+
+  <script>
+    const API_PATH = "/ask-stream";
+
+    const $q        = document.getElementById("q");
+    const $send     = document.getElementById("send");
+    const $status   = document.getElementById("status");
+    const $spinner  = $send.querySelector(".spinner");
+    const $btnText  = $send.querySelector(".btn-text");
+    const chatWindow = document.getElementById("chatWindow");
+    const clearBtn  = document.getElementById("clearBtn");
+
+    // Full conversation history sent to the backend on each turn.
+    let messages = []; // [{role: "human"|"ai", content: string}]
+
+    // Auto-grow textarea up to ~4 lines.
+    $q.addEventListener("input", () => {
+      $q.style.height = "auto";
+      $q.style.height = Math.min($q.scrollHeight, 120) + "px";
+    });
+
+    function setLoading(on) {
+      $send.disabled = on;
+      $spinner.style.opacity = on ? "1" : "0";
+      $btnText.textContent = on ? "…" : "Send";
+      $status.textContent  = on ? "Thinking…" : "";
+    }
+
+    function removeEmptyState() {
+      const el = chatWindow.querySelector(".empty-state");
+      if (el) el.remove();
+    }
+
+    function appendBubble(role, content) {
+      removeEmptyState();
+      const wrapper = document.createElement("div");
+      wrapper.className = `msg-wrapper msg-wrapper--${role === "human" ? "user" : "ai"}`;
+      const bubble = document.createElement("div");
+      bubble.className = `msg msg-${role === "human" ? "user" : "ai"}`;
+      if (role === "human") {
+        bubble.textContent = content;
+      } else {
+        bubble.innerHTML = marked.parse(content);
+      }
+      wrapper.appendChild(bubble);
+      chatWindow.appendChild(wrapper);
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+    function appendTyping() {
+      removeEmptyState();
+      const wrapper = document.createElement("div");
+      wrapper.className = "msg-wrapper msg-wrapper--ai";
+      wrapper.id = "typingIndicator";
+      const bubble = document.createElement("div");
+      bubble.className = "msg msg-ai msg-typing";
+      bubble.innerHTML = "<span></span><span></span><span></span>";
+      wrapper.appendChild(bubble);
+      chatWindow.appendChild(wrapper);
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+    function removeTyping() {
+      const el = document.getElementById("typingIndicator");
+      if (el) el.remove();
+    }
+
+    function createAiBubble() {
+      removeEmptyState();
+      const wrapper = document.createElement("div");
+      wrapper.className = "msg-wrapper msg-wrapper--ai";
+      const bubble = document.createElement("div");
+      bubble.className = "msg msg-ai";
+      wrapper.appendChild(bubble);
+      chatWindow.appendChild(wrapper);
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+      return bubble;
+    }
+
+    async function ask() {
+      const question = $q.value.trim();
+      if (!question) return;
+
+      // Snapshot history before this turn, then add user message.
+      const historyToSend = [...messages];
+      messages.push({ role: "human", content: question });
+      appendBubble("human", question);
+      $q.value = "";
+      $q.style.height = "auto";
+      setLoading(true);
+      appendTyping();
+
+      let bubble = null;
+      let answer = "";
+      let buffer = "";
+      let errored = false;
+      let errorMessage = "";
+
+      try {
+        const res = await fetch(API_PATH, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Accept": "text/event-stream" },
+          body: JSON.stringify({ question, chatHistory: historyToSend }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data?.error || res.statusText);
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+
+        // SSE parser: events are separated by blank lines, payload lines start with "data: ".
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          let sep;
+          while ((sep = buffer.indexOf("\n\n")) !== -1) {
+            const event = buffer.slice(0, sep);
+            buffer = buffer.slice(sep + 2);
+
+            const dataLines = event
+              .split("\n")
+              .filter((l) => l.startsWith("data: "))
+              .map((l) => l.slice(6));
+            if (!dataLines.length) continue;
+            const data = dataLines.join("\n");
+
+            if (data === "[DONE]") {
+              buffer = "";
+              break;
+            }
+
+            let parsed;
+            try { parsed = JSON.parse(data); }
+            catch { continue; }
+
+            if (parsed.error) {
+              errored = true;
+              errorMessage = parsed.error;
+              continue;
+            }
+
+            if (parsed.token) {
+              if (!bubble) {
+                removeTyping();
+                bubble = createAiBubble();
+              }
+              answer += parsed.token;
+              bubble.innerHTML = marked.parse(answer);
+              chatWindow.scrollTop = chatWindow.scrollHeight;
+            }
+          }
+        }
+
+        if (errored) throw new Error(errorMessage);
+
+        if (!answer) {
+          if (!bubble) {
+            removeTyping();
+            bubble = createAiBubble();
+          }
+          bubble.textContent = "(no answer)";
+        }
+
+        messages.push({ role: "ai", content: answer || "(no answer)" });
+      } catch (err) {
+        removeTyping();
+        if (bubble) bubble.remove();
+        messages.pop(); // drop the user turn so history stays clean
+        appendBubble("ai", "Error: " + (err?.message || String(err)));
+        $status.textContent = "Failed";
+      } finally {
+        setLoading(false);
+        $q.focus();
+      }
+    }
+
+    function setupSuggestionButtons() {
+      document.querySelectorAll(".suggest-btn").forEach((btn) => {
+        btn.onclick = () => {
+          let text = btn.innerText;
+          if (text.startsWith('"') && text.endsWith('"')) {
+            text = text.slice(1, -1);
+          }
+          $q.value = text;
+          ask();
+        };
+      });
+    }
+    setupSuggestionButtons();
+
+    clearBtn.addEventListener("click", () => {
+      messages = [];
+      chatWindow.innerHTML = `<div class="empty-state">
+        <p>Ask anything about Amrit's skills, experience, or projects:</p>
+        <div class="suggested-queries">
+          <button class="suggest-btn" type="button">"What are Amrit's core technical skills?"</button>
+          <button class="suggest-btn" type="button">"What web frameworks does he specialize in?"</button>
+          <button class="suggest-btn" type="button">"Tell me about some projects Amrit has built."</button>
+        </div>
+      </div>`;
+      setupSuggestionButtons();
+      $status.textContent = "";
+      $q.focus();
+    });
+
+    $send.addEventListener("click", ask);
+    $q.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) ask();
+    });
+
+
+
+    // Voice input via Web Speech API
+    const $mic = document.getElementById("mic");
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SR) {
+      $mic.style.display = "none";
+    } else {
+      let recognition = null;
+      let listening = false;
+      let baseValue = "";
+      let gotFinalResult = false;
+
+      $mic.addEventListener("click", () => {
+        if (listening) {
+          recognition.stop();
+          return;
+        }
+
+        recognition = new SR();
+        recognition.lang = "en-US";
+        recognition.interimResults = true;
+        recognition.continuous = false;
+
+        baseValue = $q.value.trim();
+        gotFinalResult = false;
+
+        recognition.onstart = () => {
+          listening = true;
+          $mic.classList.add("recording");
+          $mic.setAttribute("aria-pressed", "true");
+          $status.textContent = "Listening…";
+        };
+
+        recognition.onresult = (event) => {
+          let transcript = "";
+          for (let i = 0; i < event.results.length; i++) {
+            transcript += event.results[i][0].transcript;
+            if (event.results[i].isFinal) gotFinalResult = true;
+          }
+          $q.value = baseValue ? baseValue + " " + transcript : transcript;
+          $q.style.height = "auto";
+          $q.style.height = Math.min($q.scrollHeight, 120) + "px";
+        };
+
+        recognition.onerror = (event) => {
+          $status.textContent = "Mic error: " + event.error;
+        };
+
+        recognition.onend = () => {
+          listening = false;
+          $mic.classList.remove("recording");
+          $mic.setAttribute("aria-pressed", "false");
+          if ($status.textContent === "Listening…") $status.textContent = "";
+          if (gotFinalResult && $q.value.trim()) {
+            ask();
+          } else {
+            $q.focus();
+          }
+        };
+
+        try {
+          recognition.start();
+        } catch (err) {
+          $status.textContent = "Mic error: " + err.message;
+        }
+      });
+    }
+  </script>
+</body>
+</html>
