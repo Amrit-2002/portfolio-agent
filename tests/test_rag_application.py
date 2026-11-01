@@ -17,14 +17,16 @@ def reset_rag_chain():
 class TestRetrieveGenerate:
     def test_returns_answer_string(self):
         mock_chain = MagicMock()
-        mock_chain.invoke.return_value = {"answer": "Leonard worked on data pipelines."}
+        mock_chain.invoke.return_value = {
+            "answer": "Amrit built data pipelines and AI applications."
+        }
 
         with patch("app.rag_application._get_rag_chain", return_value=mock_chain):
             from app.rag_application import retrieve_generate
 
-            result = retrieve_generate("What did Leonard work on?")
+            result = retrieve_generate("What did Amrit work on?")
 
-        assert result == "Leonard worked on data pipelines."
+        assert result == "Amrit built data pipelines and AI applications."
 
     def test_passes_chat_history_to_chain(self):
         from langchain_core.messages import HumanMessage
@@ -168,3 +170,41 @@ class TestRetrieveGenerateStream:
 
         assert len(tokens) == 1
         assert "rate-limited" in tokens[0].lower()
+
+
+class TestSyncGithubToPinecone:
+    def test_sync_github_indexes_documents(self):
+        from app.github_loader import RepoFetchResult
+        from app.rag_application import sync_github_to_pinecone
+
+        fake_repos = [
+            {
+                "name": "test-repo",
+                "full_name": "Amrit-2002/test-repo",
+                "html_url": "https://github.com/Amrit-2002/test-repo",
+                "description": "A test repository",
+                "language": "Python",
+                "updated_at": "2026-10-01T00:00:00Z",
+                "topics": ["test"],
+            }
+        ]
+        fetch_res = RepoFetchResult(repos=fake_repos, success=True, is_complete=True)
+
+        with patch("app.rag_application.pc.has_index", return_value=True):
+            with patch("app.rag_application.pc.Index") as mock_index_cls:
+                mock_index = MagicMock()
+                mock_index_cls.return_value = mock_index
+                mock_index.list.return_value = []
+                with patch("app.rag_application.PineconeVectorStore") as mock_vs_cls:
+                    mock_vs = MagicMock()
+                    mock_vs_cls.return_value = mock_vs
+                    with patch("app.rag_application.fetch_github_repos", return_value=fetch_res):
+                        with patch(
+                            "app.rag_application.fetch_repo_readme", return_value="# Readme"
+                        ):
+                            res = sync_github_to_pinecone("Amrit-2002")
+
+        assert res["status"] == "success"
+        assert res["discovered_count"] == 1
+        assert res["added_count"] == 1
+        assert mock_vs.add_documents.called

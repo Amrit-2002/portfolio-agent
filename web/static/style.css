@@ -64,6 +64,7 @@ body {
   color: var(--text);
   background-color: var(--bg);
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -83,6 +84,7 @@ body {
   gap: 2.5rem;
   align-items: stretch;
   min-height: 100vh;
+  min-height: 100dvh;
   align-content: center;
 }
 
@@ -573,7 +575,89 @@ button:disabled {
 }
 
 #send .shortcut {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 5px;
+  font-size: 0.72rem;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  font-family: inherit;
+  font-weight: 500;
+  vertical-align: middle;
+}
+
+/* Stop / Abort Button */
+#stop {
+  background: linear-gradient(135deg, #ef5350, #d32f2f);
+  color: white;
+  border: none;
+  padding: 0 16px;
+  height: 38px;
+  border-radius: 12px;
+  font-family: var(--font-title);
+  font-weight: 700;
+  font-size: 0.92rem;
+  letter-spacing: -0.1px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 10px rgba(239, 83, 80, 0.25);
   display: none;
+  align-items: center;
+  gap: 6px;
+}
+
+#stop:hover {
+  box-shadow: 0 6px 16px rgba(239, 83, 80, 0.4);
+  filter: brightness(1.08);
+}
+
+#stop:active {
+  transform: translateY(1px);
+}
+
+/* ── AI Message Actions / Copy Button ───────────────────────── */
+.msg-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding-left: 4px;
+}
+
+.copy-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  border-radius: 6px;
+  font-family: var(--font-body);
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.copy-btn:hover {
+  background: rgba(92, 107, 192, 0.08);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.copy-btn.copied {
+  background: rgba(46, 125, 50, 0.12);
+  color: #2e7d32;
+  border-color: #2e7d32;
+}
+
+@media (prefers-color-scheme: dark) {
+  .copy-btn.copied {
+    background: rgba(129, 199, 132, 0.15);
+    color: #81c784;
+    border-color: #81c784;
+  }
 }
 
 .input-footer {

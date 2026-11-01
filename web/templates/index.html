@@ -9,6 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.9/dist/purify.min.js"></script>
 </head>
 <body>
   <div class="bg-layer bg-grid"></div>
@@ -25,8 +26,8 @@
           </div>
           <h1>Amrit's <span>Portfolio Agent</span></h1>
         </div>
-        <p class="subtitle">A LangChain RAG application exposed by a FastAPI GraphQL backend.</p>
-        <p class="subtitle">Source context: <a href="https://amrit-2002.github.io/Portfolio/" target="_blank" rel="noopener" class="source-link">Amrit's Portfolio Website</a></p>
+        <p class="subtitle">A LangChain RAG application powered by portfolio data &amp; live GitHub projects.</p>
+        <p class="subtitle">Source context: <a href="https://amrit-2002.github.io/Portfolio/" target="_blank" rel="noopener" class="source-link">Portfolio Website</a> · <a href="https://github.com/Amrit-2002" target="_blank" rel="noopener" class="source-link">GitHub Profile</a></p>
       </header>
 
       <footer class="footer">
@@ -45,18 +46,18 @@
 
         <div class="chat-window" id="chatWindow" role="log" aria-label="Chat messages" aria-live="polite">
           <div class="empty-state">
-            <p>Ask anything about Amrit's skills, experience, or projects:</p>
+            <p>Ask anything about Amrit's skills, experience, or latest GitHub projects:</p>
             <div class="suggested-queries">
               <button class="suggest-btn" type="button">"What are Amrit's core technical skills?"</button>
-              <button class="suggest-btn" type="button">"What web frameworks does he specialize in?"</button>
-              <button class="suggest-btn" type="button">"Tell me about some projects Amrit has built."</button>
+              <button class="suggest-btn" type="button">"What projects has Amrit built on GitHub?"</button>
+              <button class="suggest-btn" type="button">"Tell me about the secure_token_manager project."</button>
             </div>
           </div>
         </div>
 
         <div class="chat-input-bar">
           <div class="input-row">
-            <textarea id="q" placeholder="Type your question…" rows="1" aria-label="Your question"></textarea>
+            <textarea id="q" placeholder="Type your question… (Enter to send, Shift+Enter for new line)" rows="1" aria-label="Your question"></textarea>
             <button type="button" id="mic" class="mic-btn" aria-label="Speak your question" aria-pressed="false" title="Voice input">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <rect x="9" y="2" width="6" height="12" rx="3"/>
@@ -64,10 +65,17 @@
                 <line x1="12" y1="19" x2="12" y2="22"/>
               </svg>
             </button>
+            <!-- Stop / Abort button shown during streaming -->
+            <button type="button" id="stop" class="stop-btn" aria-label="Stop generation" title="Stop generating">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
+                <rect x="5" y="5" width="14" height="14" rx="2"/>
+              </svg>
+              <span class="btn-text">Stop</span>
+            </button>
             <button type="button" id="send" aria-label="Send message">
               <span class="spinner" aria-hidden="true"></span>
               <span class="btn-text">Send</span>
-              <kbd class="shortcut">⌘↵</kbd>
+              <kbd class="shortcut" title="Press Enter to send">↵</kbd>
             </button>
           </div>
           <div class="input-footer">
@@ -75,9 +83,6 @@
           </div>
         </div>
       </div>
-
-
-
   </main>
 
   <script>
@@ -85,6 +90,7 @@
 
     const $q        = document.getElementById("q");
     const $send     = document.getElementById("send");
+    const $stop     = document.getElementById("stop");
     const $status   = document.getElementById("status");
     const $spinner  = $send.querySelector(".spinner");
     const $btnText  = $send.querySelector(".btn-text");
@@ -93,6 +99,13 @@
 
     // Full conversation history sent to the backend on each turn.
     let messages = []; // [{role: "human"|"ai", content: string}]
+    let currentAbortController = null;
+
+    function renderMarkdown(md) {
+      if (!md) return "";
+      const rawHtml = marked.parse(md);
+      return typeof DOMPurify !== "undefined" ? DOMPurify.sanitize(rawHtml) : rawHtml;
+    }
 
     // Auto-grow textarea up to ~4 lines.
     $q.addEventListener("input", () => {
@@ -101,15 +114,76 @@
     });
 
     function setLoading(on) {
-      $send.disabled = on;
-      $spinner.style.opacity = on ? "1" : "0";
-      $btnText.textContent = on ? "…" : "Send";
-      $status.textContent  = on ? "Thinking…" : "";
+      if (on) {
+        $send.style.display = "none";
+        $stop.style.display = "inline-flex";
+        $status.textContent = "Thinking…";
+      } else {
+        $send.style.display = "inline-flex";
+        $send.disabled = false;
+        $stop.style.display = "none";
+        $spinner.style.opacity = "0";
+        $btnText.textContent = "Send";
+        if ($status.textContent === "Thinking…") {
+          $status.textContent = "";
+        }
+      }
     }
 
     function removeEmptyState() {
       const el = chatWindow.querySelector(".empty-state");
       if (el) el.remove();
+    }
+
+    async function copyToClipboard(text, btnElement) {
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          const ta = document.createElement("textarea");
+          ta.value = text;
+          ta.style.position = "fixed";
+          ta.style.left = "-9999px";
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand("copy");
+          ta.remove();
+        }
+        btnElement.classList.add("copied");
+        const label = btnElement.querySelector(".copy-label");
+        if (label) label.textContent = "Copied!";
+        setTimeout(() => {
+          btnElement.classList.remove("copied");
+          if (label) label.textContent = "Copy";
+        }, 2000);
+      } catch (e) {
+        console.error("Clipboard copy failed", e);
+      }
+    }
+
+    function attachCopyButton(wrapper, text) {
+      // Avoid duplicate actions bar
+      if (wrapper.querySelector(".msg-actions")) return;
+
+      const actions = document.createElement("div");
+      actions.className = "msg-actions";
+
+      const copyBtn = document.createElement("button");
+      copyBtn.type = "button";
+      copyBtn.className = "copy-btn";
+      copyBtn.setAttribute("aria-label", "Copy answer");
+      copyBtn.setAttribute("title", "Copy answer to clipboard");
+      copyBtn.innerHTML = `
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+        <span class="copy-label">Copy</span>
+      `;
+
+      copyBtn.addEventListener("click", () => copyToClipboard(text, copyBtn));
+      actions.appendChild(copyBtn);
+      wrapper.appendChild(actions);
     }
 
     function appendBubble(role, content) {
@@ -121,9 +195,12 @@
       if (role === "human") {
         bubble.textContent = content;
       } else {
-        bubble.innerHTML = marked.parse(content);
+        bubble.innerHTML = renderMarkdown(content);
       }
       wrapper.appendChild(bubble);
+      if (role === "ai") {
+        attachCopyButton(wrapper, content);
+      }
       chatWindow.appendChild(wrapper);
       chatWindow.scrollTop = chatWindow.scrollHeight;
     }
@@ -155,12 +232,27 @@
       wrapper.appendChild(bubble);
       chatWindow.appendChild(wrapper);
       chatWindow.scrollTop = chatWindow.scrollHeight;
-      return bubble;
+      return { wrapper, bubble };
     }
+
+    // Stop button click handler
+    $stop.addEventListener("click", () => {
+      if (currentAbortController) {
+        currentAbortController.abort();
+        $status.textContent = "Generation stopped.";
+      }
+    });
 
     async function ask() {
       const question = $q.value.trim();
       if (!question) return;
+
+      // Abort any ongoing request before starting a new one
+      if (currentAbortController) {
+        currentAbortController.abort();
+      }
+
+      currentAbortController = new AbortController();
 
       // Snapshot history before this turn, then add user message.
       const historyToSend = [...messages];
@@ -171,7 +263,7 @@
       setLoading(true);
       appendTyping();
 
-      let bubble = null;
+      let aiElement = null;
       let answer = "";
       let buffer = "";
       let errored = false;
@@ -182,11 +274,12 @@
           method: "POST",
           headers: { "Content-Type": "application/json", "Accept": "text/event-stream" },
           body: JSON.stringify({ question, chatHistory: historyToSend }),
+          signal: currentAbortController.signal,
         });
 
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          throw new Error(data?.error || res.statusText);
+          throw new Error(data?.error || `HTTP ${res.status}: ${res.statusText}`);
         }
 
         const reader = res.body.getReader();
@@ -226,12 +319,12 @@
             }
 
             if (parsed.token) {
-              if (!bubble) {
+              if (!aiElement) {
                 removeTyping();
-                bubble = createAiBubble();
+                aiElement = createAiBubble();
               }
               answer += parsed.token;
-              bubble.innerHTML = marked.parse(answer);
+              aiElement.bubble.innerHTML = renderMarkdown(answer);
               chatWindow.scrollTop = chatWindow.scrollHeight;
             }
           }
@@ -240,21 +333,35 @@
         if (errored) throw new Error(errorMessage);
 
         if (!answer) {
-          if (!bubble) {
+          if (!aiElement) {
             removeTyping();
-            bubble = createAiBubble();
+            aiElement = createAiBubble();
           }
-          bubble.textContent = "(no answer)";
+          aiElement.bubble.textContent = "(no answer)";
         }
 
-        messages.push({ role: "ai", content: answer || "(no answer)" });
+        const finalAnswer = answer || "(no answer)";
+        messages.push({ role: "ai", content: finalAnswer });
+        if (aiElement) {
+          attachCopyButton(aiElement.wrapper, finalAnswer);
+        }
       } catch (err) {
         removeTyping();
-        if (bubble) bubble.remove();
-        messages.pop(); // drop the user turn so history stays clean
-        appendBubble("ai", "Error: " + (err?.message || String(err)));
-        $status.textContent = "Failed";
+        if (err.name === "AbortError" || currentAbortController?.signal?.aborted) {
+          // Gracefully handle manual user cancellation
+          if (aiElement && answer) {
+            messages.push({ role: "ai", content: answer });
+            attachCopyButton(aiElement.wrapper, answer);
+          }
+          $status.textContent = "Stopped by user.";
+        } else {
+          if (aiElement) aiElement.wrapper.remove();
+          messages.pop(); // drop the user turn so history stays clean
+          appendBubble("ai", "Error: " + (err?.message || String(err)));
+          $status.textContent = "Failed";
+        }
       } finally {
+        currentAbortController = null;
         setLoading(false);
         $q.focus();
       }
@@ -275,13 +382,17 @@
     setupSuggestionButtons();
 
     clearBtn.addEventListener("click", () => {
+      if (currentAbortController) {
+        currentAbortController.abort();
+        currentAbortController = null;
+      }
       messages = [];
       chatWindow.innerHTML = `<div class="empty-state">
-        <p>Ask anything about Amrit's skills, experience, or projects:</p>
+        <p>Ask anything about Amrit's skills, experience, or latest GitHub projects:</p>
         <div class="suggested-queries">
           <button class="suggest-btn" type="button">"What are Amrit's core technical skills?"</button>
-          <button class="suggest-btn" type="button">"What web frameworks does he specialize in?"</button>
-          <button class="suggest-btn" type="button">"Tell me about some projects Amrit has built."</button>
+          <button class="suggest-btn" type="button">"What projects has Amrit built on GitHub?"</button>
+          <button class="suggest-btn" type="button">"Tell me about the secure_token_manager project."</button>
         </div>
       </div>`;
       setupSuggestionButtons();
@@ -290,11 +401,14 @@
     });
 
     $send.addEventListener("click", ask);
+
+    // Standard Enter to Send, Shift+Enter for newline
     $q.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) ask();
+      if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+        e.preventDefault();
+        ask();
+      }
     });
-
-
 
     // Voice input via Web Speech API
     const $mic = document.getElementById("mic");

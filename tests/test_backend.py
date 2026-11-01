@@ -114,3 +114,29 @@ class TestStreamEndpoint:
         # Pydantic validation on StreamRequest rejects empty body.
         resp = client.post("/v1/stream", json={})
         assert resp.status_code == 422
+
+
+class TestAuxiliaryEndpoints:
+    def test_healthz_returns_ok(self, client):
+        resp = client.get("/healthz")
+        assert resp.status_code == 200
+        assert resp.json() == {"status": "ok"}
+
+    def test_sync_github_endpoint(self, client):
+        fake_result = {
+            "status": "success",
+            "discovered_count": 12,
+            "added_count": 12,
+            "updated_count": 0,
+            "unchanged_count": 0,
+            "deleted_count": 0,
+            "vectors_upserted": 24,
+            "projects_synced": 12,
+            "errors": [],
+        }
+        with patch("app.backend.sync_github_to_pinecone", return_value=fake_result):
+            resp = client.post("/v1/sync/github")
+            assert resp.status_code == 200
+            assert resp.json()["status"] == "success"
+            assert resp.json()["projects_synced"] == 12
+            assert resp.json()["discovered_count"] == 12

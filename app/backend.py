@@ -7,7 +7,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel
 from strawberry.fastapi import GraphQLRouter
 
-from .rag_application import retrieve_generate, retrieve_generate_stream
+from .rag_application import retrieve_generate, retrieve_generate_stream, sync_github_to_pinecone
 
 
 @strawberry.input
@@ -58,6 +58,17 @@ def _to_lc_messages(history):
         else:
             out.append(AIMessage(content=content))
     return out
+
+
+@app.get("/healthz")
+def healthz():
+    return {"status": "ok"}
+
+
+@app.post("/v1/sync/github")
+def sync_github():
+    """Trigger an incremental sync of public GitHub projects into Pinecone."""
+    return sync_github_to_pinecone()
 
 
 @app.post("/v1/stream")
